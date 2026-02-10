@@ -12,11 +12,15 @@ First, read in the CSV data of cookie ingredients.
 Make sure that your end-result data has appropriate types for each column - these should match the types provided in the documentation in the README.md file.
 
 ```{r}
-
+library(tidyverse)
+cookies <- read_csv("choc_chip_cookie_ingredients.csv")
+glimpse(cookies)
 ```
 
 ```{python}
-
+import pandas as pd
+cookies = pd.read_csv("choc_chip_cookie_ingredients.csv")
+cookies.head()
 ```
 
 
@@ -34,11 +38,11 @@ Exploratory data analysis is the process of getting familiar with your dataset. 
 
 Generate at least 5 questions you might explore using this database of cookie ingredients.
 
-1.
-2. 
-3. 
-4. 
-5. 
+1. Which ingredients appear in the most cookie recipes?
+2. Do recipes with higher ratings use more or less sugar or butter?
+3. What is the typical quantity of chocolate chips per recipe?
+4. Are there ingredients that rarely appear together in the same recipe?
+5. Do recipes from AllRecipes differ in ingredient quantities compared to Epicurious or hand-collected recipes?
 
 
 ### Skimming the Data
@@ -53,14 +57,32 @@ Install both packages, and read the package documentation ([R](https://cran.r-pr
 
 
 ```{r}
+library(skimr)
+library(dplyr)
+library(skimr)
+library(dplyr)
+skim_with(
+  numeric = sfl(mean, sd, min, max, hist),
+  character = sfl(n_unique, n_missing)
+)
+
+skim(cookies)
 
 ```
 
 ```{python}
+from skimpy import skim
+
+skim(cookies[['Quantity', 'Rating']])
+
+skim(cookies[['Ingredient', 'Unit']])
 
 ```
 
 [Part 2] Write 1-2 sentences about what you can tell from each summary display you generate. Did you discover anything new about the data?
+
+**The data shows that ingredient and unit columns are complete and standardized, with many unique ingredients. The rating is missing for about half of the recipes. This means we can analyze ingredients and quantities reliably, but ratings are incomplete**
+
 
 ### Generating Tables
 
@@ -68,16 +90,93 @@ Another useful technique for exploratory data analysis is to generate summary ta
 You may want to use the `dplyr` package in R (`group_by` or `count` functions), as well as the `groupby` and `count` methods in Pandas. [Python example](https://sparkbyexamples.com/pandas/pandas-groupby-count-examples/), [R example](https://dplyr.tidyverse.org/reference/count.html)
 
 [Part 1] Using R and Python, generate a table that shows what **proportion** of recipes contain each type of ingredient, for the most common 20 ingredients.
+```{r}
+library(dplyr)
+ingredient_props <- cookies |>
+  group_by(Ingredient) |>
+  summarise(count = n_distinct(Recipe_Index), .groups = "drop") |>
+  mutate(proportion = count / n_distinct(cookies$Recipe_Index)) |>
+  arrange(desc(count)) |>
+  slice_head(n = 20)
+
+ingredient_props
+
+rare_ingredients <- cookies |>
+  group_by(Ingredient) |>
+  summarise(count = n_distinct(Recipe_Index), .groups = "drop") |>
+  filter(count < 20) |>
+  pull(Ingredient) |>
+  paste(collapse = ", ")
+
+rare_ingredients
+```
+
+```{python}
+import pandas as pd
+
+ingredient_counts = (
+    cookies.groupby('Ingredient')['Recipe_Index']
+    .nunique()
+    .reset_index(name='count')
+)
+ingredient_counts['proportion'] = ingredient_counts['count'] / cookies['Recipe_Index'].nunique()
+top20_ingredients = ingredient_counts.sort_values(by='count', ascending=False).head(20)
+print(top20_ingredients)
+
+rare_ingredients = ingredient_counts[ingredient_counts['count'] < 20]['Ingredient'].tolist()
+rare_ingredients_str = ", ".join(rare_ingredients)
+print(rare_ingredients_str)
+
+```
 
 [Part 2] Print out a character string that lists all of the ingredients that do not appear in at least 20 recipes.
 
+```{r}
+rare_ingredients <- cookies |>
+  group_by(Ingredient) |>
+  summarise(count = n_distinct(Recipe_Index), .groups = "drop") |>
+  filter(count < 20) |>
+  pull(Ingredient) |>
+  paste(collapse = ", ")
 
-(Delete this note, but you can include data values inline in markdown text by using backticks, at least in R. For instance, here is R's built in value for pi: `r pi`. Unfortunately, this doesn't work in python using the knitr markdown engine, but you can print the list out in python anyways using a code chunk.)
+rare_ingredients
+```
+
+```{python}
+import pandas as pd
+
+ingredient_counts = cookies.groupby("Ingredient")["Recipe_Index"].nunique()
+
+rare_ingredients = ingredient_counts[ingredient_counts < 20].index.tolist()
+
+rare_ingredients_str = ", ".join(rare_ingredients)
+
+print(rare_ingredients_str)
+
+```
 
 ### Visualization
 
 Using whatever plotting system you are comfortable with in R or python, see if you can create a couple of useful exploratory data visualizations which address one of the questions you wrote above - or another question which you've come up with as you've worked on this assignment.
 
 [Part 1] Create at least one plot (it doesn't have to be pretty) that showcases an interesting facet of the data.
+```{r}
+library(ggplot2)
+top_ingredients <- cookies |>
+  group_by(Ingredient) |>
+  summarise(num_recipes = n_distinct(Recipe_Index), .groups = "drop") |>
+  arrange(desc(num_recipes)) |>
+  slice_head(n = 20)
+
+ggplot(top_ingredients, aes(x = reorder(Ingredient, num_recipes), y = num_recipes)) +
+  geom_col(fill = "chocolate") +
+  coord_flip() +
+  labs(title = "Top 20 Most Common Ingredients in Cookie Recipes",
+       x = "Ingredient",
+       y = "Number of Recipes")
+
+```
 
 [Part 2] Write 2-3 sentences about what you can learn from that plot and what directions you might want to investigate from here.
+
+**From the plot, the top ingredients across recipes are egg, vanilla and flour indicating that most recipes share a similar core base. The less common ingredients show where recipes differ and allow for variation in flavor and texture. In the future, it could be interesting to investigate whether the presence of these less common ingredients affects recipe ratings.**
